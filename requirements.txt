@@ -1,0 +1,4 @@
+flask==3.0.0
+numpy
+matplotlib
+plotly==5.17.0

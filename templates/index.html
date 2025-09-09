@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Train Traffic Control MVP</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+  <style>
+    body { background: #f6f7fb; }
+    .card { box-shadow: 0 2px 12px rgba(0,0,0,0.06); }
+  </style>
+</head>
+<body>
+<div class="container py-4">
+  <div class="d-flex align-items-center mb-3">
+    <h2 class="me-auto">AI-powered Train Traffic Control (MVP)</h2>
+    <button id="runBtn" class="btn btn-primary">Run Simulation</button>
+  </div>
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div class="card">
+        <div class="card-header">KPIs</div>
+        <div class="card-body">
+          <ul class="list-group" id="kpiList">
+            <li class="list-group-item">Total Trains: <span id="totalTrains">-</span></li>
+            <li class="list-group-item">Completed Trains: <span id="completedTrains">-</span></li>
+            <li class="list-group-item">Avg Delay (min): <span id="avgDelay">-</span></li>
+            <li class="list-group-item">Utilization (%): <span id="utilization">-</span></li>
+            <li class="list-group-item">Throughput (trains/hr): <span id="throughput">-</span></li>
+          </ul>
+        </div>
+      </div>
+      <div class="card mt-3">
+        <div class="card-header">Recommendations</div>
+        <div class="card-body">
+          <ul id="recoList" class="list-group small"></ul>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-8">
+      <div class="card">
+        <div class="card-header">Space-Time Diagram</div>
+        <div class="card-body">
+          <div id="chart" style="height: 520px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+  async function runSimulation() {
+    const res = await fetch('/api/simulate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    const data = await res.json();
+    if (!data.success) {
+      alert('Simulation error: ' + data.error);
+      return;
+    }
+    document.getElementById('totalTrains').innerText = data.kpis.total_trains;
+    document.getElementById('completedTrains').innerText = data.kpis.completed_trains;
+    document.getElementById('avgDelay').innerText = data.kpis.avg_delay_min;
+    document.getElementById('utilization').innerText = data.kpis.section_utilization;
+    document.getElementById('throughput').innerText = data.kpis.throughput;
+
+    // Chart
+    const chartRes = await fetch('/api/schedule_chart');
+    const chartData = await chartRes.json();
+    const fig = JSON.parse(chartData.chart);
+    Plotly.newPlot('chart', fig.data, fig.layout, {displayModeBar: false});
+
+    // Recommendations
+    const recoRes = await fetch('/api/optimization_recommendations');
+    const recoData = await recoRes.json();
+    const list = document.getElementById('recoList');
+    list.innerHTML = '';
+    (recoData.recommendations || []).forEach(r => {
+      const li = document.createElement('li');
+      li.className = 'list-group-item';
+      li.textContent = `${r.severity.toUpperCase()}: ${r.message}`;
+      list.appendChild(li);
+    });
+  }
+  document.getElementById('runBtn').addEventListener('click', runSimulation);
+</script>
+</body>
+</html>
+
