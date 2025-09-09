@@ -2,7 +2,15 @@
 
 # Start Train Traffic Control MVP
 
-echo "🚂 Starting Train Traffic Control MVP..."
+echo "🚂 Starting Enhanced Train Traffic Control MVP..."
+echo ""
+echo "Features:"
+echo "  ✓ Control Panel with simulation controls"
+echo "  ✓ Real-time Performance Metrics"
+echo "  ✓ Live Event Log"
+echo "  ✓ Collision Detection & Safety Validation"
+echo "  ✓ Network Visualization"
+echo "  ✓ Train Schedule Monitoring"
 echo ""
 
 # Navigate to project directory
@@ -19,4 +27,4 @@ echo ""
 echo "Press Ctrl+C to stop the server"
 echo ""
 
-flask --app src.web.app run --port 5000
+flask --app src.web.enhanced_app run --port 5000

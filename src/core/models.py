@@ -25,6 +25,7 @@ class Train:
     route: List[str]  # sequence of block ids to traverse
     direction: str  # 'up' or 'down'
     dep_time_min: float  # scheduled departure time (from first block)
+    train_type: str = "UNKNOWN"  # EXPRESS, PASSENGER, FREIGHT, etc.
 
 @dataclass
 class TrainState:
