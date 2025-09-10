@@ -29,10 +29,21 @@
 <body>
   <div class="container py-4">
     <div class="d-flex justify-content-between align-items-center mb-3 topbar">
-      <h3 class="m-0">🚆 Train Traffic Control System – MVP</h3>
+      <h3 class="m-0">🚆 Real-Time Delhi Train Control System</h3>
       <div>
         <span class="me-2">Status: <span id="simStatus" class="fw-bold">Idle</span></span>
         <span>Progress: <span id="simProgress">0</span>%</span>
+        <small class="ms-2" id="lastUpdate">Last Update: --:--:--</small>
+      </div>
+    </div>
+    
+    <!-- Delhi Weather & Alerts Bar -->
+    <div class="row mb-3">
+      <div class="col">
+        <div class="alert alert-info mb-0 py-2" id="weatherAlert">
+          <strong>🌤️ Weather:</strong> <span id="weatherInfo">Loading...</span>
+          <strong class="ms-3">⚠️ System Alerts:</strong> <span id="systemAlerts">0 active</span>
+        </div>
       </div>
     </div>
 
@@ -71,6 +82,24 @@
                 <div class="metric" id="mSafety">-</div>
                 <div class="metric-label">Safety Score</div>
               </div>
+              <div class="col-6">
+                <div class="metric" id="mOnTime">-</div>
+                <div class="metric-label">On-Time (%)</div>
+              </div>
+              <div class="col-6">
+                <div class="metric" id="mActive">-</div>
+                <div class="metric-label">Active Trains</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Route Recommendations Card -->
+        <div class="card mt-3">
+          <div class="card-header">🚏 Route Recommendations</div>
+          <div class="card-body">
+            <div id="routeRecommendations" class="small">
+              <div class="text-muted">No active recommendations</div>
             </div>
           </div>
         </div>
@@ -146,19 +175,79 @@
       const res = await fetch('/api/realtime/status');
       const data = await res.json();
       if (data) {
-        document.getElementById('simStatus').textContent = data.running ? 'Running' : 'Idle';
+        const status = data.stopped ? 'Stopped' : (data.running ? 'Running' : 'Idle');
+        document.getElementById('simStatus').textContent = status;
         document.getElementById('simProgress').textContent = data.progress || 0;
+        document.getElementById('lastUpdate').textContent = `Last Update: ${data.timestamp || '--:--:--'}`;
+
+        // Update weather and alerts
+        if (data.weather_conditions) {
+          const weather = data.weather_conditions;
+          document.getElementById('weatherInfo').textContent = 
+            `${weather.condition} (${weather.temperature}°C) - ${weather.advisory}`;
+        }
+        
+        const alertCount = (data.delhi_alerts || []).length;
+        document.getElementById('systemAlerts').textContent = `${alertCount} active`;
+        
+        // Update metrics in real-time
+        if (data.kpis) {
+          document.getElementById('mThroughput').textContent = data.kpis.throughput || '-';
+          document.getElementById('mAvgDelay').textContent = data.kpis.avg_delay || '-';
+          document.getElementById('mSafety').textContent = data.kpis.safety_score || '-';
+          document.getElementById('mOnTime').textContent = data.kpis.on_time_performance || '-';
+          document.getElementById('mActive').textContent = data.kpis.active_trains || '-';
+        }
+        
+        // Update route recommendations
+        updateRouteRecommendations(data.route_recommendations || []);
 
         // Update events
         const et = document.getElementById('eventTable');
         et.innerHTML = '';
         (data.recent_events || []).slice().reverse().forEach(e => {
           const tr = document.createElement('tr');
-          tr.innerHTML = `<td>${e.time_str}</td><td>${e.event_type}</td><td>${e.train_id || ''}</td><td>${e.block_id || ''}</td><td class="small">${e.message}</td>`;
+          const severityClass = e.severity === 'CRITICAL' ? 'text-danger' : 
+                               e.severity === 'WARNING' ? 'text-warning' : '';
+          tr.innerHTML = `<td>${e.time_str}</td><td><span class="${severityClass}">${e.event_type}</span></td><td>${e.train_id || ''}</td><td>${e.block_id || ''}</td><td class="small">${e.message}</td>`;
           et.appendChild(tr);
         });
       }
       renderNetwork();
+    }
+    
+    function updateRouteRecommendations(recommendations) {
+      const container = document.getElementById('routeRecommendations');
+      
+      if (!recommendations || recommendations.length === 0) {
+        container.innerHTML = '<div class="text-muted">No active recommendations</div>';
+        return;
+      }
+      
+      let html = '';
+      recommendations.forEach(rec => {
+        const efficiencyBadge = rec.efficiency === 'HIGH' ? 'success' : 
+                               rec.efficiency === 'MEDIUM' ? 'warning' : 'danger';
+        
+        html += `
+          <div class="mb-2 p-2 border rounded">
+            <div class="d-flex justify-content-between align-items-center">
+              <strong>Route: ${rec.route.join(' → ')}</strong>
+              <span class="badge bg-${efficiencyBadge}">${rec.efficiency}</span>
+            </div>
+            <div class="text-muted">${rec.alternative_reason}</div>
+            <div class="small">
+              <strong>Time:</strong> ${rec.estimated_time_minutes} min | 
+              <strong>Occupied:</strong> ${rec.occupied_blocks.length} blocks
+            </div>
+            <div class="small mt-1">
+              <em>${rec.recommendation}</em>
+            </div>
+          </div>
+        `;
+      });
+      
+      container.innerHTML = html;
     }
 
     async function refreshMetrics() {
@@ -205,10 +294,76 @@
       }, 1200);
     });
     document.getElementById('btnStop').addEventListener('click', async () => {
-      await fetch('/api/control/stop_simulation', { method: 'POST' });
-      await refreshRealtime();
+      const btn = document.getElementById('btnStop');
+      btn.disabled = true;
+      btn.textContent = 'Stopping...';
+      
+      try {
+        const res = await fetch('/api/control/stop_simulation', { method: 'POST' });
+        const result = await res.json();
+        
+        if (result.success) {
+          alert(`✅ ${result.message} at ${result.timestamp}`);
+        } else {
+          alert(`❌ ${result.message}`);
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Stop';
+        await refreshRealtime();
+      }
     });
-    document.getElementById('btnRefresh').addEventListener('click', async () => { await refreshMetrics(); await refreshRealtime(); });
+    
+    document.getElementById('btnRefresh').addEventListener('click', async () => {
+      const btn = document.getElementById('btnRefresh');
+      const originalText = btn.textContent;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Refreshing...';
+      
+      try {
+        const res = await fetch('/api/control/refresh_metrics', { method: 'POST' });
+        const result = await res.json();
+        
+        if (result.success) {
+          // Show success feedback
+          btn.innerHTML = '✅ Refresh Done!';
+          btn.className = 'btn btn-success';
+          
+          // Display detailed update info
+          const updateInfo = result.updated_data;
+          const message = `Refresh completed at ${result.timestamp}\n\n` +
+                         `📊 Updated: ${updateInfo.station_count} stations, ${updateInfo.live_trains} trains\n` +
+                         `🚨 Alerts: ${updateInfo.system_alerts}\n` +
+                         `🛤️ Recommendations: ${updateInfo.recommendations_count}`;
+          
+          setTimeout(() => alert(message), 200);
+          
+          // Refresh UI data
+          await refreshMetrics();
+          await refreshRealtime();
+          
+          // Reset button after delay
+          setTimeout(() => {
+            btn.className = 'btn btn-outline-secondary';
+            btn.textContent = originalText;
+          }, 2000);
+        } else {
+          throw new Error(result.error || 'Refresh failed');
+        }
+      } catch (error) {
+        btn.innerHTML = '❌ Refresh Failed';
+        btn.className = 'btn btn-danger';
+        alert(`Refresh failed: ${error.message}`);
+        
+        setTimeout(() => {
+          btn.className = 'btn btn-outline-secondary';
+          btn.textContent = originalText;
+        }, 2000);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    
     document.getElementById('btnSafety').addEventListener('click', validateSafety);
 
     // Initial render

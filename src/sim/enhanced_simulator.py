@@ -90,6 +90,10 @@ class EnhancedSimulator:
         train_distances = {t.id: 0.0 for t in trains}
         train_times = {t.id: 0.0 for t in trains}
         
+        # Log simulation start
+        self._log_event(0, "SYSTEM", None, None, 
+                      f"Enhanced simulation started with {len(trains)} trains", "INFO")
+        
         # Main simulation loop
         self.current_time = 0.0
         while self.current_time <= max_time:
@@ -216,9 +220,13 @@ class EnhancedSimulator:
                 if occupant is not None:
                     block_busy_time[block_id] += self.time_step
             
-            # Callback for real-time updates
-            if realtime_callback:
-                realtime_callback(self.current_time, train_states, kpis, self.events[-10:])
+            # Callback for real-time updates (every 10 time steps for better visibility)
+            if realtime_callback and int(self.current_time * 2) % 20 == 0:  # Every 10 seconds
+                should_continue = realtime_callback(self.current_time, train_states, kpis, self.events[-10:])
+                if should_continue == False:  # Explicit check for stop signal
+                    self._log_event(self.current_time, "SYSTEM", None, None,
+                                  "Simulation stopped by user request", "INFO")
+                    break
             
             self.current_time += self.time_step
         
@@ -242,6 +250,10 @@ class EnhancedSimulator:
         critical_events = sum(1 for e in self.events if e.severity == "CRITICAL")
         warning_events = sum(1 for e in self.events if e.severity == "WARNING")
         kpis.safety_score = max(0, 100 - (critical_events * 20) - (warning_events * 5))
+        
+        # Log simulation completion
+        self._log_event(self.current_time, "SYSTEM", None, None,
+                      f"Simulation completed after {self.current_time:.1f} minutes", "INFO")
         
         return list(train_states.values()), kpis, self.events
     
